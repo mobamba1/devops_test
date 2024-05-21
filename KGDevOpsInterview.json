@@ -1,0 +1,141 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+
+    "Description": "KG DevOps interview CF stack",
+
+    "Resources": {
+        "InterviewEC2InstanceSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Enables SSH and HTTP using port 22/80",
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": "22",
+                        "ToPort": "22",
+                        "CidrIp": "0.0.0.0/0"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": "80",
+                        "ToPort": "80",
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ],
+                "VpcId": { "Ref": "VpcId",
+                "_comment":"No VPC was defined" }
+                
+            }
+        },
+
+        "InterviewEC2Instance": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "InstanceType": "t2.nano",
+                "ImageId": "ami-047bb4163c506cd98",
+                "SecurityGroupIds": [
+                    { "Ref": "InterviewEC2InstanceSecurityGroup" }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "John Dela Cruz"
+                    }
+                ],
+                "UserData": {
+                    "Fn::Base64": {
+                        "Fn::Sub": "#!/bin/bash\nyum -y update"
+                    }
+                }
+            }
+        },
+
+        "InterviewALBSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security Group ALB",
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": "80",
+                        "ToPort": "80",
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ],
+                "VpcId": { "Ref": "VpcId",
+                "_comment":"No VPC was defined" }
+            }
+        },
+
+        "InterviewALB": {
+            "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+            "Properties": {
+                "Name": "InterviewALB",
+                "Subnets": [
+                    { "Ref": "SubnetOne" },
+                    { "Ref": "SubnetTwo" }
+                ],
+                "_comment": "Subnets will need to use exact subnect ID to work",
+                "SecurityGroups": [
+                    { "Ref": "InterviewALBSecurityGroup" }
+                ],
+                "Scheme": "internet-facing",
+                "LoadBalancerAttributes": [ 
+                    {
+                        "Key": "deletion_protection.enabled",
+                        "Value": "false",
+                        "_comment": "This part is optional - can be enabled to prevent accidental closing of ALB"
+                    }
+                ]
+            }
+        },
+
+        "InterviewTargetGroup": {
+            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+            "Properties": {
+                "Name": "InterviewTargetGroup",
+                "Port": 80,
+                "Protocol": "HTTP",
+                "VpcId": { "Ref": "VpcId",
+                "_comment":"No VPC was defined" },
+                "TargetType": "instance",
+                "Targets": [
+                    {
+                        "Id": { "Ref": "InterviewEC2Instance" },
+                        "Port": 80
+                    }
+                ]
+            }
+        },
+
+        "InterviewALBListener": {
+            "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Properties": {
+                "LoadBalancerArn": { "Ref": "InterviewALB" },
+                "Port": 80,
+                "Protocol": "HTTP",
+                "DefaultActions": [
+                    {
+                        "Type": "forward",
+                        "TargetGroupArn": { "Ref": "InterviewTargetGroup" }
+                    }
+                ]
+            }
+        }
+    },
+
+    "Outputs": {
+        "InstanceId": {
+            "Description": "The Instance ID of the EC2 instance",
+            "Value": {
+                "Ref": "InterviewEC2Instance"
+            }
+        },
+        "LoadBalancerDNSName": {
+            "Description": "The DNS name of the ALB",
+            "Value": {
+                "Fn::GetAtt": ["InterviewALB", "DNSName"]
+            }
+        }
+    }
+}
